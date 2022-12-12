@@ -1,0 +1,138 @@
+---
+title: "MA678 Final Project"
+author: "Kaiwei Xiao"
+date: "2022-12-11"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+stock = read.csv("/Users/j/MA678/final project/archive/2018_Financial_Data.csv"
+                 ,header = T)
+```
+
+```{r}
+#clean the data and rename the columns
+
+new_stock = stock[, c('Revenue.Growth', 'R.D.Expenses',
+                      'X2019.PRICE.VAR....', 'Sector')]
+
+new_stock = na.omit(data.frame(new_stock))
+colnames(new_stock) =  c("rev.growth","R.D_expense","var","sector")
+```
+
+
+```{r}
+hist(new_stock$rev.growth, breaks = 100)
+hist(new_stock$R.D_expense, breaks = 100)
+hist(new_stock$var, breaks = 100)
+barplot(table(new_stock$sector))
+```
+
+
+```{r}
+levels(factor(new_stock$sector))
+
+```
+
+```{r}
+slr = lm( new_stock$var ~ new_stock$rev.growth + new_stock$R.D_expense +
+            new_stock$sector)
+summary(slr)
+```
+
+```{r}
+ggplotRegression <- function (fit) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2]
+                             , y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+ggplotRegression(lm(var ~ R.D_expense + rev.growth + sector, data = new_stock))
+```
+
+
+```{r,echo=FALSE,fig.height=4,fig.width=12}
+library(ggplot2)
+
+ggplot(new_stock)+
+  aes(x=R.D_expense + rev.growth, y=var, group=sector)+geom_point(alpha=0.3)+stat_smooth(se=FALSE,method="lm",aes(sector=1))+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+theme(legend.position="none")+facet_grid(~sector)+geom_line(alpha=0.3)
+```
+
+
+```{r,echo=FALSE,fig.height=4,fig.width=12}
+
+new_stock$resid<-resid(glm( var~new_stock$R.D_expense+
+                              new_stock$R.D_expense:sector, 
+                            family=gaussian,data=new_stock))
+ggplot(new_stock)+
+  aes(x=R.D_expense, y=var,color=factor(sector))+geom_point(alpha=0.3)+stat_smooth(se=FALSE,method="lm")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(legend.position="none")+geom_line(aes(group=sector))+facet_grid(~sector)+
+  geom_hline(yintercept = 0,lty=2)
+```
+
+```{r}
+library(lme4) 
+
+
+
+new_stock$fsector = factor(new_stock$sector)
+new_stock$pvar =1+ new_stock$var/100
+new_stock$growth = new_stock$rev.growth +1
+
+
+
+#define Min-Max normalization function
+min_max_norm <- function(x) {
+    (x - min(x)) / (max(x) - min(x))
+  }
+
+#apply Min-Max normalization to  columns in  dataset
+
+nstock <- as.data.frame(lapply(new_stock[,c(1,2,3)], min_max_norm))
+nstock[,"sector"] = new_stock$fsector
+
+head(nstock)
+```
+
+
+```{r}
+mix = lmer(var ~ rev.growth + R.D_expense + ((1 + R.D_expense + rev.growth)|sector)
+           , data=nstock )
+```
+
+
+```{r}
+summary(mix)
+```
+
+```{r}
+coef(mix)
+```
+
+```{r}
+#install.packages("lattice")
+library(lattice)
+dotplot(ranef(mix, condVar=T))
+```
+
+```{r, eval=FALSE}
+#install.packages("glmmTMB")
+library(glmmTMB)
+plot_model(mix, type = "re", show.values = TRUE)
+```
+
+```{r, eval=FALSE}
+plot_model(mix, type = "diag", show.values = TRUE)
+```
+
